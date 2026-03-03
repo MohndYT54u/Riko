@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RIKO UNFILTERED</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="terminal">
+        <div class="header">
+            <span>SYSTEM@RIKO_CORE:~$</span>
+            <span id="status" style="font-size: 11px; color: #6272a4;">Voice: ready</span>
+        </div>
+        <div id="display"></div>
+        <div class="input-area">
+            <textarea id="inp" placeholder="قل شيئاً أيها المستخدم..." rows="1"></textarea>
+            <button id="send-btn" onclick="ask()">إرسال</button>
+        </div>
+    </div>
+
+    <script>
+        const synth = window.speechSynthesis;
+        const inputField = document.getElementById("inp");
+        const status = document.getElementById("status");
+        let selectedVoice = null;
+
+        function loadVoices() {
+            let voices = synth.getVoices();
+            selectedVoice = voices.find(v => v.lang.includes('ar')) || voices[0];
+        }
+        loadVoices();
+        if (speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = loadVoices;
+
+        function speak(text) {
+            synth.cancel();
+            const utterance = new SpeechSynthesisUtterance(text.replace(/[^\w\s\u0600-\u06FF.,!؟]/g, " "));
+            utterance.voice = selectedVoice;
+            utterance.onstart = () => { status.innerText = "Voice: talking"; status.style.color = "#ff79c6"; };
+            utterance.onend = () => { status.innerText = "Voice: ready"; status.style.color = "#6272a4"; };
+            synth.speak(utterance);
+        }
+
+        async function ask() {
+            const val = inputField.value.trim();
+            if(!val) return;
+            document.getElementById("display").innerHTML += `<div class="user-msg">> المستخدم: ${val}</div>`;
+            inputField.value = ""; inputField.style.height = "48px";
+            
+            const response = await fetch('/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({text: val})
+            });
+            const data = await response.json();
+            const rikoDiv = document.createElement("div");
+            rikoDiv.className = "riko-msg";
+            rikoDiv.innerHTML = `> ريكو: `;
+            document.getElementById("display").appendChild(rikoDiv);
+            speak(data.reply);
+            let i = 0;
+            function type() { if(i < data.reply.length) { rikoDiv.innerHTML += data.reply.charAt(i); i++; setTimeout(type, 25); } }
+            type();
+        }
+
+        inputField.addEventListener("input", function() { this.style.height = "auto"; this.style.height = (this.scrollHeight) + "px"; });
+        inputField.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(); } });
+    </script>
+</body>
+</html>
